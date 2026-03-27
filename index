@@ -1,0 +1,211 @@
+import pygame
+import random
+import sys
+
+# Initialize Pygame
+pygame.init()
+
+# Screen dimensions
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
+FPS = 60
+
+# Colors
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+YELLOW = (255, 255, 0)
+
+# Create game window
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Bike Racing Game")
+clock = pygame.time.Clock()
+font = pygame.font.Font(None, 36)
+
+class Bike(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((40, 60))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.speed = 5
+        self.health = 100
+        
+    def update(self):
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] and self.rect.x > 0:
+            self.rect.x -= self.speed
+        if keys[pygame.K_RIGHT] and self.rect.x < SCREEN_WIDTH - self.rect.width:
+            self.rect.x += self.speed
+        if keys[pygame.K_UP] and self.rect.y > 0:
+            self.rect.y -= self.speed
+        if keys[pygame.K_DOWN] and self.rect.y < SCREEN_HEIGHT - self.rect.height:
+            self.rect.y += self.speed
+    
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+class Obstacle(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((50, 50))
+        self.image.fill(RED)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.speed = 3
+    
+    def update(self):
+        self.rect.y += self.speed
+    
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+class Coin(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((25, 25))
+        self.image.fill(YELLOW)
+        self.rect = self.image.get_rect()
+        self.rect.x = x
+        self.rect.y = y
+        self.speed = 3
+    
+    def update(self):
+        self.rect.y += self.speed
+    
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+class Game:
+    def __init__(self):
+        self.bike = Bike(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80)
+        self.obstacles = []
+        self.coins = []
+        self.score = 0
+        self.level = 1
+        self.game_over = False
+        self.spawn_timer = 0
+        self.coin_spawn_timer = 0
+    
+    def spawn_obstacle(self):
+        x = random.randint(0, SCREEN_WIDTH - 50)
+        y = -50
+        self.obstacles.append(Obstacle(x, y))
+    
+    def spawn_coin(self):
+        x = random.randint(0, SCREEN_WIDTH - 25)
+        y = -25
+        self.coins.append(Coin(x, y))
+    
+    def update(self):
+        if not self.game_over:
+            self.bike.update()
+            
+            # Spawn obstacles
+            self.spawn_timer += 1
+            if self.spawn_timer > max(20, 60 - self.level * 5):
+                self.spawn_obstacle()
+                self.spawn_timer = 0
+            
+            # Spawn coins
+            self.coin_spawn_timer += 1
+            if self.coin_spawn_timer > 40:
+                self.spawn_coin()
+                self.coin_spawn_timer = 0
+            
+            # Update obstacles
+            for obstacle in self.obstacles[:]:
+                obstacle.update()
+                if obstacle.rect.y > SCREEN_HEIGHT:
+                    self.obstacles.remove(obstacle)
+                    self.score += 10
+                elif self.bike.rect.colliderect(obstacle.rect):
+                    self.bike.health -= 20
+                    self.obstacles.remove(obstacle)
+                    if self.bike.health <= 0:
+                        self.game_over = True
+            
+            # Update coins
+            for coin in self.coins[:]:
+                coin.update()
+                if coin.rect.y > SCREEN_HEIGHT:
+                    self.coins.remove(coin)
+                elif self.bike.rect.colliderect(coin.rect):
+                    self.score += 50
+                    self.coins.remove(coin)
+            
+            # Update level based on score
+            self.level = (self.score // 100) + 1
+    
+    def draw(self, surface):
+        surface.fill(BLACK)
+        
+        # Draw road
+        pygame.draw.line(surface, WHITE, (100, 0), (100, SCREEN_HEIGHT), 2)
+        pygame.draw.line(surface, WHITE, (SCREEN_WIDTH - 100, 0), (SCREEN_WIDTH - 100, SCREEN_HEIGHT), 2)
+        
+        # Draw game objects
+        self.bike.draw(surface)
+        for obstacle in self.obstacles:
+            obstacle.draw(surface)
+        for coin in self.coins:
+            coin.draw(surface)
+        
+        # Draw UI
+        score_text = font.render(f"Score: {self.score}", True, WHITE)
+        level_text = font.render(f"Level: {self.level}", True, WHITE)
+        health_text = font.render(f"Health: {self.bike.health}", True, WHITE)
+        
+        surface.blit(score_text, (10, 10))
+        surface.blit(level_text, (10, 50))
+        surface.blit(health_text, (10, 90))
+        
+        # Draw game over screen
+        if self.game_over:
+            game_over_text = font.render("GAME OVER!", True, RED)
+            final_score_text = font.render(f"Final Score: {self.score}", True, WHITE)
+            restart_text = font.render("Press SPACE to restart or Q to quit", True, WHITE)
+            
+            surface.blit(game_over_text, (SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 60))
+            surface.blit(final_score_text, (SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2))
+            surface.blit(restart_text, (SCREEN_WIDTH // 2 - 200, SCREEN_HEIGHT // 2 + 60))
+    
+    def reset(self):
+        self.bike = Bike(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80)
+        self.obstacles = []
+        self.coins = []
+        self.score = 0
+        self.level = 1
+        self.game_over = False
+
+def main():
+    game = Game()
+    running = True
+    
+    while running:
+        clock.tick(FPS)
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.KEYDOWN:
+                if game.game_over:
+                    if event.key == pygame.K_SPACE:
+                        game.reset()
+                    elif event.key == pygame.K_q:
+                        running = False
+        
+        game.update()
+        game.draw(screen)
+        pygame.display.flip()
+    
+    pygame.quit()
+    sys.exit()
+
+if __name__ == "__main__":
+    main()
